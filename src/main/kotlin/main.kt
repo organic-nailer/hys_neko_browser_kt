@@ -2,14 +2,21 @@ import org.jetbrains.skija.*
 import org.lwjgl.glfw.GLFW.*
 import org.lwjgl.opengl.GL
 import org.lwjgl.opengl.GL11
+import java.io.*
+import java.lang.Exception
+import java.net.Socket
+import java.nio.file.Files
+import java.nio.file.Paths
 
 fun main() {
-    val window = Window()
-    println("init")
-    window.start()
-    println("after thread started")
-    Thread.sleep(10000)
-    window.interrupt()
+    val communicator = Communicator()
+    communicator.getHttp("localhost", 8887)
+//    val window = Window()
+//    println("init")
+//    window.start()
+//    println("after thread started")
+//    Thread.sleep(10000)
+//    window.interrupt()
 }
 
 class Window: Thread() {
@@ -96,6 +103,41 @@ class Window: Thread() {
             context.flush()
             glfwSwapBuffers(windowHandle!!)
             glfwPollEvents()
+        }
+    }
+}
+
+class Communicator {
+    var fileWriter: PrintWriter? = null
+
+    fun getHttp(address: String, port: Int) {
+        try {
+            val socket = Socket(address, port)
+            val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
+            val writer = BufferedWriter(OutputStreamWriter(socket.getOutputStream()))
+
+            writer.write("GET / HTTP/1.0\r\n\r\n")
+            writer.flush()
+
+            val tmpPath = Paths.get("tmp.html").toAbsolutePath()
+
+            if(!Files.exists(tmpPath)) {
+                Files.createFile(tmpPath) ?: throw IOException("ファイルが作成できませんでした")
+            }
+
+            val outputFile = tmpPath.toFile()
+            fileWriter = PrintWriter(outputFile)
+
+            while(true) {
+                val line = reader.readLine() ?: break
+
+                fileWriter?.println(line)
+            }
+            fileWriter?.flush()
+        } catch(e: Exception) {
+            println("get error: ${e.message}")
+        } finally {
+            fileWriter?.close()
         }
     }
 }
