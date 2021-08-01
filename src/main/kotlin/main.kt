@@ -9,8 +9,15 @@ import java.nio.file.Files
 import java.nio.file.Paths
 
 fun main() {
-    val communicator = Communicator()
-    communicator.getHttp("localhost", 8887)
+    val htmlText = "<html><head><title>sample web page</title>" +
+        "</head><body>hello, world!</body></html>"
+    val parser = Parser()
+    parser.initTree()
+    parser.findTag(htmlText, 0)
+    parser.showTree(parser.dom)
+    println("The title text is...: ${parser.solveNode(parser.dom, Node.Tag.TITLE)}")
+//    val communicator = Communicator()
+//    communicator.getHttp("localhost", 8887)
 //    val window = Window()
 //    println("init")
 //    window.start()
@@ -139,5 +146,138 @@ class Communicator {
         } finally {
             fileWriter?.close()
         }
+    }
+}
+
+class Parser {
+    var dom: Node = Node(Node.Tag.ROOT)
+    fun findTag(input: String, offset: Int): Int {
+        var i = offset
+        val buffer = mutableListOf<Char>()
+        //var currentNode = dom
+        while(i < input.length) {
+            var c = input[i]
+            if(c == '<') {
+                if(buffer.isNotEmpty()) {
+                    println("TEXT:${buffer.joinToString("")}")
+                    dom = sortTag(buffer.joinToString(""), dom)
+                    buffer.clear()
+                }
+                print("[find tag]")
+                i = findTag(input, i+1)
+            }
+            else if(c == '>') {
+                println(buffer.joinToString(""))
+                dom = sortTag(buffer.joinToString(""), dom)
+                buffer.clear()
+                return i
+            }
+            else {
+                buffer.add(c)
+            }
+            i++
+        }
+        return 0
+    }
+
+    fun sortTag(input: String, node: Node): Node {
+        if(input.startsWith("html")) {
+            return addNode(Node.Tag.HTML, null, node)
+        }
+        else if(input.startsWith("head")) {
+            return addNode(Node.Tag.HEAD, null, node)
+        }
+        else if(input.startsWith("title")) {
+            return addNode(Node.Tag.TITLE, null, node)
+        }
+        else if(input.startsWith("body")) {
+            return addNode(Node.Tag.BODY, null, node)
+        }
+        else if(input.startsWith("/html")) {
+            return node.parent!!
+        }
+        else if(input.startsWith("/head")) {
+            return node.parent!!
+        }
+        else if(input.startsWith("/title")) {
+            return node.parent!!
+        }
+        else if(input.startsWith("/body")) {
+            return node.parent!!
+        }
+        else {
+            return addNode(Node.Tag.TEXT, input, node).parent!!
+        }
+    }
+
+    fun initTree() {
+        dom = addNode(Node.Tag.ROOT, null, null)
+    }
+
+    fun addNode(tag: Node.Tag, content: String?, parent: Node?): Node {
+        val node = Node(tag)
+        node.content = content ?: ""
+        node.parent = parent
+        node.child = null
+        node.next = null
+        if(parent == null) return node
+
+        if(parent.child == null) {
+            parent.child = node
+        }
+        else {
+            var last = parent.child!!
+            while(last.next != null) {
+                last = last.next!!
+            }
+            last.next = node
+        }
+        return node
+    }
+
+    fun showTree(node: Node?, d: Int = 0) {
+        var depth = d
+        if(node == null) return
+        print("TAG: ${node.tag}")
+        if(node.content != null) {
+            print(" ${node.content}")
+        }
+        print("\n")
+
+        if(node.child != null) {
+            depth++
+            for(i in 0 until depth) print("-")
+            showTree(node.child, depth)
+            depth--
+        }
+
+        if(node.next != null) {
+            for(i in 0 until depth) print("-")
+            showTree(node.next, depth)
+        }
+    }
+
+    fun solveNode(node: Node?, tag: Node.Tag): String? {
+        if(node == null) return null
+
+        return if(node.tag == tag) {
+            node.child!!.content
+        }
+        else if(node.child != null) {
+            solveNode(node.child, tag)
+        }
+        else {
+            solveNode(node.next, tag)
+        }
+    }
+}
+
+class Node(var tag: Tag) {
+    var content: String = ""
+    var parent: Node? = null
+    var child: Node? = null
+    var next: Node? = null
+    enum class Tag {
+        ROOT, HTML, HEAD, TITLE, BODY, TEXT
     }
 }
