@@ -9,21 +9,21 @@ import java.nio.file.Files
 import java.nio.file.Paths
 
 fun main() {
-    val htmlText = "<html><head><title>sample web page</title>" +
-        "</head><body>hello, world!</body></html>"
+    val communicator = Communicator()
+    communicator.getHttp("localhost", 8887)
+    val htmlText = communicator.getCache() ?: return
+//    val htmlText = "<html><head><title>sample web page</title>" +
+//        "</head><body>hello, world!</body></html>"
     val parser = Parser()
     parser.initTree()
     parser.findTag(htmlText, 0)
     parser.showTree(parser.dom)
     println("The title text is...: ${parser.solveNode(parser.dom, Node.Tag.TITLE)}")
-//    val communicator = Communicator()
-//    communicator.getHttp("localhost", 8887)
-//    val window = Window()
-//    println("init")
-//    window.start()
-//    println("after thread started")
-//    Thread.sleep(10000)
-//    window.interrupt()
+    val window = Window()
+    window.start()
+    window.addTitle(parser.solveNode(parser.dom, Node.Tag.TITLE) ?: "unknown")
+    window.addURL("localhost:8887")
+    window.addBody(parser.solveNode(parser.dom, Node.Tag.BODY) ?: "unknown")
 }
 
 class Window: Thread() {
@@ -33,11 +33,17 @@ class Window: Thread() {
     val width = 1000
     val height = 600
 
+    @Volatile
+    var drawRectQueue = listOf<DrawRectData>()
+    @Volatile
+    var drawTextQueue = listOf<DrawTextData>()
+
+
     private fun init() {
         glfwInit()
         glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE)
         glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE)
-        windowHandle = glfwCreateWindow(width,height,"Skija Sample", 0, 0)
+        windowHandle = glfwCreateWindow(width,height,"hys_neko_browser_kt", 0, 0)
         glfwMakeContextCurrent(windowHandle!!)
         glfwSwapInterval(1)
         glfwShowWindow(windowHandle!!)
@@ -61,13 +67,36 @@ class Window: Thread() {
         canvas = surface.canvas
     }
 
+    fun addTitle(text: String) {
+        drawTextQueue = drawTextQueue.plus(DrawTextData(text, 10f, 20f))
+    }
+    fun addURL(text: String) {
+        drawTextQueue = drawTextQueue.plus(DrawTextData(text, 100f, 48f))
+    }
+    fun addBody(text: String) {
+        drawTextQueue = drawTextQueue.plus(DrawTextData(text, 10f, 75f))
+    }
+
     override fun run() {
         super.run()
         println("thread start")
         init()
 
-        while(!glfwWindowShouldClose(windowHandle!!)) {
+        drawRectQueue = listOf(
+            DrawRectData(Rect.makeXYWH(0f,0f, 200f, 25f), 0xFFDDDDDD.toInt()),
+            DrawRectData(Rect.makeXYWH(200f,0f, width.toFloat(), 25f), 0xFFAAAAAA.toInt()),
+            DrawRectData(Rect.makeXYWH(0f,25f, width.toFloat(), 30f), 0xFFDDDDDD.toInt()),
+            DrawRectData(Rect.makeXYWH(100f,30f, 700f, 20f), 0xFFFFFFFF.toInt()),
+            DrawRectData(Rect.makeXYWH(0f,55f, width.toFloat(), height.toFloat()), 0xFFFFFFFF.toInt())
+        )
 
+        val textPaint = Paint().apply {
+            color = 0xFF000000.toInt()
+        }
+        val typeFace = FontMgr.getDefault().matchFamilyStyle("Arial", FontStyle.NORMAL)
+        val font = Font(typeFace, 16f)
+
+        while(!glfwWindowShouldClose(windowHandle!!)) {
 //            val paint = Paint().apply { color = 0xFFFF0000.toInt() }
 //
 //            canvas.drawCircle(100f,100f,40f, paint)
@@ -80,38 +109,52 @@ class Window: Thread() {
 //            val font = Font(typeFace, 13f)
 //            canvas.drawString("Hello", 50f,50f, font, paint2)
 
-            val rectTitleTab = Rect.makeXYWH(0f,0f, 100f, 25f)
-            val paintTitleTab = Paint().apply { color = 0xFFDDDDDD.toInt() }
-            canvas.drawRect(rectTitleTab, paintTitleTab)
-            val rectEmptyTab = Rect.makeXYWH(100f,0f, width.toFloat(), 25f)
-            val paintEmptyTab = Paint().apply { color = 0xFFAAAAAA.toInt() }
-            canvas.drawRect(rectEmptyTab, paintEmptyTab)
-            val rectURLBar = Rect.makeXYWH(0f,25f, width.toFloat(), 30f)
-            val paintURLBar = Paint().apply { color = 0xFFDDDDDD.toInt() }
-            canvas.drawRect(rectURLBar, paintURLBar)
-            val rectURLBarBox = Rect.makeXYWH(100f,30f, 700f, 20f)
-            val paintURLBarBox = Paint().apply { color = 0xFFFFFFFF.toInt() }
-            canvas.drawRect(rectURLBarBox, paintURLBarBox)
-            val rectBackground = Rect.makeXYWH(0f,55f, width.toFloat(), height.toFloat())
-            val paintBackground = Paint().apply { color = 0xFFFFFFFF.toInt() }
-            canvas.drawRect(rectBackground, paintBackground)
-
-            val textPaint = Paint().apply {
-                color = 0xFF000000.toInt()
+            drawRectQueue.forEach {
+                canvas.drawRect(it.rect, Paint().apply { color = it.color })
             }
-            val typeFace = FontMgr.getDefault().matchFamilyStyle("Arial", FontStyle.NORMAL)
-            val font = Font(typeFace, 16f)
-            canvas.drawString("Text", 10f, 20f, font, textPaint)
 
-            canvas.drawString("example.com", 100f, 48f, font, textPaint)
+//            val rectTitleTab = Rect.makeXYWH(0f,0f, 100f, 25f)
+//            val paintTitleTab = Paint().apply { color = 0xFFDDDDDD.toInt() }
+//            canvas.drawRect(rectTitleTab, paintTitleTab)
+//            val rectEmptyTab = Rect.makeXYWH(100f,0f, width.toFloat(), 25f)
+//            val paintEmptyTab = Paint().apply { color = 0xFFAAAAAA.toInt() }
+//            canvas.drawRect(rectEmptyTab, paintEmptyTab)
+//            val rectURLBar = Rect.makeXYWH(0f,25f, width.toFloat(), 30f)
+//            val paintURLBar = Paint().apply { color = 0xFFDDDDDD.toInt() }
+//            canvas.drawRect(rectURLBar, paintURLBar)
+//            val rectURLBarBox = Rect.makeXYWH(100f,30f, 700f, 20f)
+//            val paintURLBarBox = Paint().apply { color = 0xFFFFFFFF.toInt() }
+//            canvas.drawRect(rectURLBarBox, paintURLBarBox)
+//            val rectBackground = Rect.makeXYWH(0f,55f, width.toFloat(), height.toFloat())
+//            val paintBackground = Paint().apply { color = 0xFFFFFFFF.toInt() }
+//            canvas.drawRect(rectBackground, paintBackground)
 
-            canvas.drawString("Hello, test GUI!", 10f, 75f, font, textPaint)
+            drawTextQueue.forEach {
+                canvas.drawString(it.text, it.x, it.y, font, textPaint)
+            }
+
+//            canvas.drawString("Text", 10f, 20f, font, textPaint)
+//
+//            canvas.drawString("example.com", 100f, 48f, font, textPaint)
+//
+//            canvas.drawString("Hello, test GUI!", 10f, 75f, font, textPaint)
 
             context.flush()
             glfwSwapBuffers(windowHandle!!)
             glfwPollEvents()
         }
     }
+
+    data class DrawRectData(
+        val rect: Rect,
+        val color: Int
+    )
+
+    data class DrawTextData(
+        val text: String,
+        val x: Float,
+        val y: Float
+    )
 }
 
 class Communicator {
@@ -146,6 +189,22 @@ class Communicator {
         } finally {
             fileWriter?.close()
         }
+    }
+
+    fun getCache(): String? {
+        val tmpPath = Paths.get("tmp.html")
+        if(Files.exists(tmpPath)) {
+            try {
+                val reader = FileReader(tmpPath.toFile())
+                return reader.readLines().joinToString("")
+            }
+            catch(e: Exception) {
+                println("failed to read cache")
+                return null
+            }
+        }
+        println("cache file not found")
+        return null
     }
 }
 
@@ -260,15 +319,18 @@ class Parser {
     fun solveNode(node: Node?, tag: Node.Tag): String? {
         if(node == null) return null
 
-        return if(node.tag == tag) {
-            node.child!!.content
+        if(node.tag == tag) {
+            return node.child!!.content
         }
-        else if(node.child != null) {
-            solveNode(node.child, tag)
+        var ret: String? = null
+        if(node.child != null) {
+            ret = solveNode(node.child, tag)
         }
-        else {
-            solveNode(node.next, tag)
+
+        if(ret == null) {
+            ret = solveNode(node.next, tag)
         }
+        return ret
     }
 }
 
